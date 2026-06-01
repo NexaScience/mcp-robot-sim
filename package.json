@@ -1,0 +1,28 @@
+{
+  "name": "mcp-robot-sim",
+  "version": "1.0.0",
+  "private": true,
+  "description": "Toy robot simulator MCP server: a grid robot with a first-person pseudo-3D MCP Apps widget, drivable by the agent and by in-widget buttons over Streamable HTTP.",
+  "main": "dist/index.js",
+  "type": "module",
+  "scripts": {
+    "build": "tsc",
+    "start": "node dist/index.js",
+    "dev": "tsx watch --env-file=.env src/index.ts",
+    "test": "vitest run"
+  },
+  "dependencies": {
+    "@modelcontextprotocol/ext-apps": "^1.7.3",
+    "@modelcontextprotocol/sdk": "^1.28.0",
+    "dotenv": "^16.5.0",
+    "express": "^5.1.0",
+    "zod": "^3.25.51"
+  },
+  "devDependencies": {
+    "@types/express": "^5.0.3",
+    "@types/node": "^22.0.0",
+    "tsx": "^4.19.4",
+    "typescript": "^5.9.3",
+    "vitest": "^3.0.0"
+  }
+}

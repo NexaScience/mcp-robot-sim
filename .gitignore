@@ -1,0 +1,21 @@
+# Environment files
+.env
+
+# Logs
+logs
+*.log
+
+# OS
+.DS_Store
+
+# TypeScript build outputs
+dist/
+*.js
+*.js.map
+*.d.ts
+!/node_modules/
+
+# Node modules
+node_modules/
+
+.serena/
