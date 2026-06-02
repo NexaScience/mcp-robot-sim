@@ -76,26 +76,26 @@ const renderViewHtml = (): string => {
 <title>Robot Simulator</title>
 <style>
   :root { color-scheme: light dark; }
-  body { font-family: system-ui, -apple-system, sans-serif; margin: 0; padding: 16px; }
-  #stage { position: relative; width: 100%; max-width: 480px; margin: 0 auto; }
-  #view { display: block; width: 100%; aspect-ratio: 4 / 3; background: #111; border-radius: 10px; }
-  #minimap { position: absolute; right: 8px; bottom: 8px; width: 112px; height: 112px; border: 1px solid rgba(255,255,255,0.4); border-radius: 6px; background: rgba(0,0,0,0.35); }
-  #pose { text-align: center; color: #888; font-size: 0.85rem; margin: 10px 0 4px; }
-  #controls { display: grid; grid-template-columns: repeat(3, 1fr); gap: 8px; max-width: 480px; margin: 8px auto 0; }
-  #controls button { padding: 12px 8px; border: 1px solid #c8c8c8; border-radius: 8px; background: rgba(127,127,127,0.08); cursor: pointer; font: inherit; font-size: 1.1rem; }
+  body { font-family: system-ui, -apple-system, sans-serif; margin: 0; padding: 8px; }
+  #stage { position: relative; width: 100%; max-width: 400px; margin: 0 auto; }
+  #view { display: block; width: 100%; aspect-ratio: 16 / 9; background: #111; border-radius: 10px; }
+  #minimap { position: absolute; right: 8px; bottom: 8px; width: 96px; height: 96px; border: 1px solid rgba(255,255,255,0.4); border-radius: 6px; background: rgba(0,0,0,0.35); }
+  #pose { text-align: center; color: #888; font-size: 0.8rem; margin: 6px 0 2px; }
+  #controls { display: grid; grid-template-columns: repeat(3, 1fr); gap: 6px; max-width: 400px; margin: 6px auto 0; }
+  #controls button { padding: 8px 6px; border: 1px solid #c8c8c8; border-radius: 8px; background: rgba(127,127,127,0.08); cursor: pointer; font: inherit; font-size: 1rem; }
   #controls button:hover { background: rgba(127,127,127,0.18); border-color: #888; }
   #controls button:disabled { opacity: 0.5; cursor: default; }
   #btn-forward { grid-column: 2; }
   #btn-left { grid-column: 1; grid-row: 2; }
   #btn-reset { grid-column: 2; grid-row: 2; }
   #btn-right { grid-column: 3; grid-row: 2; }
-  #status { text-align: center; color: #2e7d32; font-size: 0.8rem; margin-top: 8px; min-height: 1em; }
+  #status { text-align: center; color: #2e7d32; font-size: 0.78rem; margin-top: 6px; min-height: 1em; }
 </style>
 </head>
 <body>
   <div id="stage">
-    <canvas id="view" width="480" height="360"></canvas>
-    <canvas id="minimap" width="112" height="112"></canvas>
+    <canvas id="view" width="480" height="270"></canvas>
+    <canvas id="minimap" width="96" height="96"></canvas>
   </div>
   <div id="pose">Robot ${initialPose}</div>
   <div id="controls">
@@ -129,6 +129,36 @@ const renderViewHtml = (): string => {
 
       function notify(method, params) {
         post({ jsonrpc: "2.0", method: method, params: params || {} });
+      }
+
+      // SEP-1865 sizing: tell the host the widget's natural height so it fits
+      // inline WITHOUT a scrollbar (the canvas + controls below it must be fully
+      // visible). Mirrors ext-apps' setupSizeChangedNotifications: temporarily
+      // set documentElement height to "max-content" to measure the true content
+      // height, then emit ui/notifications/size-changed { width, height } in px.
+      function sendSize() {
+        var el = document.documentElement;
+        var prev = el.style.height;
+        el.style.height = "max-content";
+        var h = Math.ceil(el.getBoundingClientRect().height);
+        el.style.height = prev;
+        notify("ui/notifications/size-changed", {
+          width: Math.ceil(window.innerWidth),
+          height: h,
+        });
+      }
+
+      // Debounce size emission to once per animation frame so the burst of
+      // ResizeObserver callbacks during layout/canvas sizing collapses into a
+      // single notification per frame.
+      var sizePending = false;
+      function scheduleSize() {
+        if (sizePending) return;
+        sizePending = true;
+        requestAnimationFrame(function () {
+          sizePending = false;
+          sendSize();
+        });
       }
 
       window.addEventListener("message", function (e) {
@@ -192,6 +222,8 @@ const renderViewHtml = (): string => {
         drawFirstPerson(view);
         drawMinimap(world, robot);
         enableControls();
+        // Content (canvas + controls) is now laid out — re-report height.
+        scheduleSize();
       }
 
       function drawFirstPerson(view) {
@@ -310,6 +342,17 @@ const renderViewHtml = (): string => {
         appCapabilities: { availableDisplayModes: ["inline", "fullscreen"] },
       }).then(function () {
         notify("ui/notifications/initialized", {});
+        // Report initial height immediately so the host sizes the inline frame
+        // before the first paint (avoids a transient scrollbar on open).
+        sendSize();
+        // Continuously keep the host's frame height in sync with the content
+        // (canvas reflow on resize, theme/font changes, etc.). Debounced to one
+        // emission per animation frame.
+        if (typeof ResizeObserver === "function") {
+          var ro = new ResizeObserver(function () { scheduleSize(); });
+          ro.observe(document.documentElement);
+          ro.observe(document.body);
+        }
         // Fallback paint if no tool-result was pushed.
         return callTool("look", {}).then(function (res) {
           var sc = res && res.structuredContent;
